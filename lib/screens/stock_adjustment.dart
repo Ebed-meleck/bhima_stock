@@ -152,7 +152,7 @@ class _StockAdjustmentPage extends State<StockAdjustmentPage> {
                     ),
                   ),
                   Container(
-                    margin: EdgeInsets.symmetric(vertical: 20),
+                    margin: EdgeInsets.symmetric(horizontal: 10),
                     child: FilledButton(
                       onPressed: _txtQuantity.text == ''
                           ? null
@@ -194,37 +194,50 @@ class _StockAdjustmentPage extends State<StockAdjustmentPage> {
     var date = DateTime.now();
     var movementUuid = _uuid.v4();
     final allLots = await Lot.inventories(database, _selectedDepotUuid);
-    List<StockMovement> movements = [];
-    lots.forEach((element) async {
-      if (element != null &&
-          element['lot_uuid'] != null &&
-          element['quantity'] > 0) {
-        var lot = allLots.where((lt) => lt.uuid == element['lot_uuid']).first;
-        var movement = StockMovement(
-          uuid: _uuid.v4(),
-          movementUuid: movementUuid,
-          depotUuid: _selectedDepotUuid,
-          inventoryUuid: element['inventory_uuid'],
-          lotUuid: element['lot_uuid'],
-          reference: '',
-          entityUuid: _selectedDepotUuid,
-          periodId: int.parse(formatDate(date, [yyyy, mm])),
-          userId: _userId,
-          fluxId: INVENTORY_ADJUSTMENT,
-          isExit: 1,
-          date: date,
-          description:
-              'Ajustement de stock ${element['inventory_text']} - ${element['lot_label']}',
-          quantity: element['quantity'],
-          oldQuantity: element['oldQuantity'] ?? 0,
-          unitCost: element['unit_cost'].toDouble(),
-        );
-        movements.add(movement);
-        lot.quantity = element['quantity'];
+    final List<StockMovement> movements = [];
+    final List<Lot> lotsUpdate = [];
 
-        await Lot.updateLot(database, lot);
+    for (final element in lots) {
+      if (element == null ||
+          element['lot_uuid'] == null ||
+          element['quantity'] <= 0) {
+        continue;
       }
-    });
+
+      Lot? lot;
+      try {
+        lot = allLots.firstWhere((lt) => lt.uuid == element['lot_uuid']);
+      } catch (e) {
+        lot = null;
+      }
+
+      if (lot == null) {
+        continue;
+      }
+      var movement = StockMovement(
+        uuid: _uuid.v4(),
+        movementUuid: movementUuid,
+        depotUuid: _selectedDepotUuid,
+        inventoryUuid: element['inventory_uuid'],
+        lotUuid: element['lot_uuid'],
+        reference: '',
+        entityUuid: _selectedDepotUuid,
+        periodId: int.parse(formatDate(date, [yyyy, mm])),
+        userId: _userId,
+        fluxId: INVENTORY_ADJUSTMENT,
+        isExit: 1,
+        date: date,
+        description:
+            'Ajustement de stock ${element['inventory_text']} - ${element['lot_label']}',
+        quantity: element['quantity'],
+        oldQuantity: element['oldQuantity'] ?? 0,
+        unitCost: element['unit_cost'].toDouble(),
+      );
+      movements.add(movement);
+      lot.quantity = element['quantity'];
+
+      await Lot.updateLot(database, lot);
+    }
     await StockMovement.txInsertMovement(database, movements);
   }
 
@@ -261,20 +274,29 @@ class _StockAdjustmentPage extends State<StockAdjustmentPage> {
               Expanded(
                 child: createListView(context, snapshot),
               ),
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: FilledButton(
-                  onPressed: () {
-                    onSubmit();
-                  },
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      Text('Soumettre'),
-                    ],
+              Container(
+                color: Color.fromARGB(255, 238, 239, 240),
+                foregroundDecoration: const BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                        color: Color.fromARGB(255, 67, 68, 69), width: 0.3),
                   ),
                 ),
-              ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14.0),
+                  child: FilledButton(
+                    onPressed: () {
+                      onSubmit();
+                    },
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        Text('Soumettre'),
+                      ],
+                    ),
+                  ),
+                ),
+              )
             ],
           );
         } else {

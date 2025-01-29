@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bhima_collect/models/depot.dart';
 import 'package:bhima_collect/models/inventory.dart';
 import 'package:bhima_collect/providers/project.dart';
+import 'package:flutter/widgets.dart';
 import 'package:internet_connection_checker/internet_connection_checker.dart';
 import 'package:bhima_collect/services/connect.dart';
 import 'package:bhima_collect/services/db.dart';
@@ -167,10 +168,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             },
                             style: OutlinedButton.styleFrom(
                               side: BorderSide(
-                                  color: Provider.of<Project>(context,
-                                                  listen: false)
-                                              .projectId ==
-                                          projects[index]['id']
+                                  color: projectId == projects[index]['id']
                                       ? Colors.blue
                                       : Colors.black),
                               shape: RoundedRectangleBorder(
@@ -182,9 +180,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: <Widget>[
                                 Text('${projects[index]['name']}'),
-                                Provider.of<Project>(context, listen: true)
-                                            .projectId ==
-                                        projects[index]['id']
+                                projectId == projects[index]['id']
                                     ? const Icon(
                                         Icons.check_circle,
                                         color: Colors.blue,
@@ -200,24 +196,15 @@ class _SettingsPageState extends State<SettingsPage> {
                   }),
                 ),
               ),
-              Container(
-                margin: EdgeInsets.symmetric(vertical: 20),
-                child: FilledButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  style: ButtonStyle(
-                      backgroundColor:
-                          MaterialStateProperty.all<Color>(Colors.blueAccent)),
-                  child: const Text('Soumettre'),
-                ),
-              )
             ]),
           );
         });
   }
 
   Future getProject() async {
+    if (_serverUrl == '') {
+      return alertWarning(context, 'Veuillez saisir l\'URL du serveur');
+    }
     try {
       setState(() {
         _isProject = true;
@@ -229,7 +216,7 @@ class _SettingsPageState extends State<SettingsPage> {
       });
     } catch (e) {
       setState(() {
-        _isProject = true;
+        _isProject = false;
       });
       throw Exception(e);
     }
@@ -264,6 +251,9 @@ class _SettingsPageState extends State<SettingsPage> {
             _progressValue = 0.0;
             _token = '';
           });
+          if (kDebugMode) {
+            print('ERROR SYNC getToken :  $e');
+          }
           // ignore: use_build_context_synchronously
           return alertError(context, "Echec d'authentification");
         }
@@ -444,18 +434,35 @@ class _SettingsPageState extends State<SettingsPage> {
                           horizontal: 16, vertical: 8),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
                           const Text('Projet :  '),
                           Text(project),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.edit,
-                              color: Colors.blue,
-                            ),
-                            onPressed: () {
-                              getProject().then((value) => {modalBottom()});
-                            },
-                          )
+                          !_isProject
+                              ? IconButton(
+                                  icon: const Icon(
+                                    Icons.edit,
+                                    color: Colors.blue,
+                                    size: 20,
+                                  ),
+                                  onPressed: () {
+                                    getProject()
+                                        .then((value) => {modalBottom()})
+                                        .catchError((e) {
+                                      alertError(context, 'Echec de connexion');
+                                    });
+                                  },
+                                )
+                              : const Padding(
+                                  padding: EdgeInsets.only(left: 10),
+                                  child: SizedBox(
+                                      width: 15,
+                                      height: 15,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.blue,
+                                        strokeWidth: 4.0,
+                                        strokeCap: StrokeCap.round,
+                                      ))),
                         ],
                       ),
                     ),
@@ -467,7 +474,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       : () async {
                           await handleSubmit();
                         },
-                  child: _isButtonDisabled || _isProject
+                  child: _isButtonDisabled
                       ? const Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [

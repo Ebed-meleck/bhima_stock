@@ -177,20 +177,15 @@ class _HomePageState extends State<HomePage> {
           .where((element) => element.isSync == 0 || element.isSync == null)
           .toList();
       var groupedByIsExit = lots.groupListsBy((element) => element.isExit);
-
-      // List<StockMovement> exitMovement = [];
-      List<StockMovement> entryMovement = [];
-
-      groupedByIsExit.forEach((key, value) {
-        if (key != 1) {
-          entryMovement = value;
-        }
-      });
+      ;
+      List<StockMovement> entryMovement = groupedByIsExit[0] ?? [];
 
       var entryGrouped =
           entryMovement.groupListsBy((element) => element.movementUuid);
 
-      entryGrouped.forEach((key, value) async {
+      for (var entries in entryGrouped.entries) {
+        var key = entries.key;
+        var value = entries.value;
         var result = await connexion
             .post(url, _token, {'lots': value, 'sync_mobile': 1});
         if (key != null && result != null && result['uuids'] != null) {
@@ -200,7 +195,7 @@ class _HomePageState extends State<HomePage> {
             _countSynced++;
           });
         }
-      });
+      }
       // fetch fresh data from the server after movements
       await fetchLots();
       setState(() {
@@ -221,32 +216,27 @@ class _HomePageState extends State<HomePage> {
           await StockMovement.stockMovements(database);
       var lots = movements
           .where((element) =>
-              element.isSync == 0 ||
-              element.isSync == null && element.fluxId == 15)
+              (element.isSync == 0 || element.isSync == null) &&
+              element.fluxId == 15)
           .toList();
       var groupedByIsExit = lots.groupListsBy((element) => element.isExit);
 
-      List<StockMovement> exitMovement = [];
+      List<StockMovement> exitMovement = groupedByIsExit[1] ?? [];
 
-      groupedByIsExit.forEach((key, value) {
-        if (key == 1) {
-          exitMovement = value;
-        }
-      });
       var exitGrouped =
           exitMovement.groupListsBy((element) => element.movementUuid);
 
-      exitGrouped.forEach((key, value) async {
+      for (var entry in exitGrouped.entries) {
+        var key = entry.key;
+        var value = entry.value;
         var result = await connexion
             .post(url, _token, {'lots': value, 'sync_mobile': 1});
         if (key != null && result != null && result['uuids'] != null) {
-          // update the sync status for valid lots of the movements
-          // await StockMovement.updateSyncStatus(database, key, result['uuids']);
           setState(() {
             _countSynced++;
           });
         }
-      });
+      }
       // fetch fresh data from the server after movements
       await fetchLots();
     } catch (e) {
@@ -265,36 +255,33 @@ class _HomePageState extends State<HomePage> {
 
       var lots = movements
           .where((element) =>
-              element.isSync == 0 ||
-              element.isSync == null && element.fluxId == 9 ||
-              element.fluxId == 11)
+              (element.isSync == 0 || element.isSync == null) &&
+              (element.fluxId == 9 || element.fluxId == 11))
           .toList();
+
       var groupedByIsExit = lots.groupListsBy((element) => element.isExit);
 
-      List<StockMovement> exitMovement = [];
-
-      groupedByIsExit.forEach((key, value) {
-        if (key == 1) {
-          exitMovement = value;
-        }
-      });
+      List<StockMovement> exitMovement = groupedByIsExit[1] ?? [];
 
       var exitGrouped =
           exitMovement.groupListsBy((element) => element.movementUuid);
 
-      exitGrouped.forEach((key, value) async {
+      for (var entry in exitGrouped.entries) {
+        var key = entry.key;
+        var value = entry.value;
+
         var result = await connexion
             .post(url, _token, {'lots': value, 'sync_mobile': 1});
+
         if (key != null && result != null && result['uuids'] != null) {
-          // update the sync status for valid lots of the movements
           await StockMovement.updateSyncStatus(database, key, result['uuids']);
           setState(() {
             _countSynced++;
           });
         }
-      });
-      // fetch fresh data from the server after movements
+      }
       await fetchLots();
+
       setState(() {
         _progress += 0.1;
       });
@@ -312,9 +299,11 @@ class _HomePageState extends State<HomePage> {
       const url = '/stock/lots/create';
       List lots = await StockMovement.getLocalLots(database);
       var grouped = lots.groupListsBy((element) => element['movementUuid']);
-      grouped.forEach((key, value) async {
+
+      for (var entries in grouped.entries) {
+        var value = entries.value;
         await connexion.post(url, _token, {'lots': value});
-      });
+      }
       setState(() {
         _progress += 0.1;
       });
@@ -323,7 +312,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future syncBtnClicked() async {
+  Future<void> syncBtnClicked() async {
     bool isInternetAvailable = await InternetConnectionChecker().hasConnection;
 
     if (!isInternetAvailable) {
@@ -335,49 +324,52 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _isLoading = true;
       });
-      // init connexion by getting the user token
+
+      // Init connexion by getting the user token
       var token =
           await connexion.getToken(_serverUrl, _username, _password, projectId);
       setState(() {
         _token = token;
         _progress = 0.1;
       });
+
+      // Execute each sync step sequentially
+      await syncLots();
+      await syncMovementEntries();
+      await syncAdjustMovements();
+      await syncStockMovementExits();
+      await fetchInventory();
+
+      // Save sync info and update state
+      _saveSyncInfo(_formattedLastUpdate, _countSynced, _maxToSync);
+
+      setState(() {
+        lastUpdate = DateTime.now();
+        _formattedLastUpdate =
+            formatDate(lastUpdate, [dd, '/', mm, '/', yyyy, '  ', HH, ':', nn]);
+      });
+
+      // Show success message and update state
+      // ignore: use_build_context_synchronously
+      alertSuccess(context, 'Synchronisation des données réussie');
+
+      setState(() {
+        _progress = 0.0;
+        _isLoading = false;
+        _isRecentSync = true;
+      });
+
+      // Clean all movements
+      cleanAllMovement();
     } catch (e) {
       setState(() {
         _isLoading = false;
         _progress = 0.0;
       });
+
       // ignore: use_build_context_synchronously
-      return alertError(context, "Echec d'authentification");
+      return alertError(context, "Echec de synchronisation: ${e.toString()}");
     }
-
-    syncLots()
-        .then((_) => syncMovementEntries())
-        .then((_) => syncAdjustMovements())
-        .then((_) => syncStockMovementExits())
-        .then((_) => syncStockMovementExits())
-        .then((_) => fetchInventory())
-        .then((_) => {
-              _saveSyncInfo(_formattedLastUpdate, _countSynced, _maxToSync),
-
-              setState(() {
-                lastUpdate = DateTime.now();
-                _formattedLastUpdate = formatDate(
-                    lastUpdate, [dd, '/', mm, '/', yyyy, '  ', HH, ':', nn]);
-              }),
-
-              // await syncStockMovements();
-              // ignore: use_build_context_synchronously
-              alertSuccess(context, 'Synchronisation des données réussie'),
-
-              setState(() {
-                _progress = 0.0;
-                _isLoading = false;
-                _isRecentSync = true;
-              }),
-              cleanAllMovement()
-            })
-        .catchError(onError);
   }
 
   cleanAllMovement() async {
@@ -385,9 +377,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   void onError(e) {
-    if (kDebugMode) {
-      print('ERROR::SYNCHRONISATION $e');
-    }
     setState(() {
       _isLoading = false;
       _progress = 0.0;
