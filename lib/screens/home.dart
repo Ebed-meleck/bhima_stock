@@ -167,7 +167,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future syncMovementEntries() async {
+   Future syncMovementEntries() async {
     try {
       const url = '/stock/lots/movements';
       List<StockMovement> movements =
@@ -375,7 +375,7 @@ class _HomePageState extends State<HomePage> {
   cleanAllMovement() async {
     await StockMovement.clean(database);
   }
-
+  
   void onError(e) {
     setState(() {
       _isLoading = false;
